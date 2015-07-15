@@ -3,6 +3,7 @@
 import socket
 import sys
 import struct
+import ctypes
 
 # Following is the packet format
 # | Frame Control | Duration/ID | Address 1 | Address 2 | Address 3 | ...
@@ -29,26 +30,36 @@ POS_TX_ADDR = 28 + RADIOTAP_HEADER_SIZE #28th Byte from start, with RADIO Tap He
  
 PROBE_MASK = 0x78
 
+def packetDump(context = 'Packet contents are: ', packet = ' '):
+    print context + ';Len=' + str(len(packet)) + ';' + ','.join(x.encode('hex') for x in packet)
+    pass
+
+
 def debug(msg):
     print msg
     pass
     
-def checkProbe(radio_tap_header):
-    debug('Radio Tap Header content:' + ' '.join(x.encode('hex') for x in radio_tap_header))
+def checkProbe(pkt_content):
+    check_probe = 0
+    radio_tap_header = str(pkt_content[:RADIOTAP_HEADER_SIZE])
+    packetDump('Radio Tap Header:', radio_tap_header)
     try:
-        check_probe = struct.unpack('!h', radio_tap_header[0:2])
-    except Exception in e:
-        print 'Received exception in unpacking: ' + e
+        packetDump('probevalue:', radio_tap_header[POS_SSI_BYTE])
+        check_probe = (struct.unpack('!h', radio_tap_header[POS_SSI_BYTE:POS_SSI_BYTE+2]))[0]
+    except Exception as e:
+        print 'Received exception in unpacking: ' + str(e)
+    else:
+        check_probe = socket.ntohs(int(check_probe))
+        check_probe = ((check_probe >> 8) | PROBE_MASK) >> 4
     return check_probe
 
 def parsePacket(pkt):
     # Parsing the packet fields and creating a tuple
     pkt_content = pkt[0]
-    print 'Packet content: ' + ','.join(x.encode('hex') for x in pkt[0])
+    packetDump('Full Packet contents are:', pkt[0])
     # Extract Packet Type
-    is_probe = checkProbe(str(pkt_content[RADIOTAP_HEADER_SIZE:(RADIOTAP_HEADER_SIZE + PROBE_HEADER_SIZE+5)]))
-    print "Value of Probe is: %d"  %is_probe
-    return [0,0]
+    is_probe = checkProbe(pkt_content)
+    return [is_probe, 0],0
     
 
 def commitToDb(tuple_t):
@@ -89,6 +100,11 @@ if __name__ == "__main__":
             debug('Received Interrupt while reading packet')
             print 'Stopping packet capture.'
             breakoff = 1
+            continue
+
+        #if Packet size is less than expected size, keep continuing
+        if len(pkt[0]) < (RADIOTAP_HEADER_SIZE + PROBE_HEADER_SIZE):
+            debug('Packet size less than expected')
             continue
 
         #Function to return a set of values extracted from this packet
