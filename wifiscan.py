@@ -1,13 +1,19 @@
 from scapy.all import *
-
+import MySQLdb
 PROBE_REQUEST_TYPE=0
 PROBE_REQUEST_SUBTYPE=4
+
+db = MySQLdb.connect(host="localhost", user="root", 
+			passwd="root", db="wifiscan") 
+cur = db.cursor()
+
+
 
 def PacketHandler(pkt):
     if pkt.haslayer(Dot11):
         if pkt.type==PROBE_REQUEST_TYPE and pkt.subtype == PROBE_REQUEST_SUBTYPE :
             PrintPacket(pkt)
-            #pkt.show()
+#            pkt.show()
 
 def PrintPacket(pkt):
     try:
@@ -19,8 +25,11 @@ def PrintPacket(pkt):
     else:
         signal_strength = -100
         print "No signal strength found"    
-    print "Timestamp:%d Source: %s SSID: %s RSSi: %d"%(pkt.time, pkt.addr2,pkt.getlayer(Dot11ProbeReq).info,signal_strength)
-    #print "Timestamp:%d Target: %s Source: %s SSID: %s RSSi: %d"%(pkt.time, pkt.addr3,pkt.addr2,pkt.getlayer(Dot11ProbeReq).info,signal_strength)
+    if signal_strength == -256:
+	signal_strength= 0
+    #print "Timestamp:%d Source: %s RSSi: %d"%(pkt.time, pkt.addr2,signal_strength)
+    print "INSERT INTO client (timestamp,mac,rssi) VALUES (%d,\"%s\",%d)"%(pkt.time, pkt.addr2,signal_strength)
+    cur.execute("INSERT INTO client (timestamp,mac,rssi) VALUES (%s, \"%s\", %s)",(int(float(pkt.time)), pkt.addr2,signal_strength))
 
 def main():
     from datetime import datetime
