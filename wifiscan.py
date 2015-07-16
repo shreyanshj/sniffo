@@ -1,25 +1,73 @@
+#*****************************************
+#*******************    ******************
+#*****************  ****  ****************
+#********    ***  ********  **************
+#*******  ***  *************  ************
+#********    **  *********  **************
+#****************  ****  *****************
+#*******************  ********************
+#*****************************************
+
+# Requires: Scapy (Python Packet Capture Library)
+#           MySQLdb (Python MySQLDB Bindings)
+#           Python 2.7
 from scapy.all import *
 import MySQLdb
-PROBE_REQUEST_TYPE=0
-PROBE_REQUEST_SUBTYPE=4
+from datetime import datetime
+import sys
 
-db = MySQLdb.connect(host="localhost", user="root", 
-			passwd="root", db="wifiscan") 
-cur = db.cursor()
+# Some Globals
+# Don't touch these - packet types for Sniffer
+PROBE_REQUEST_TYPE = 0
+PROBE_REQUEST_SUBTYPE = 4
+# Set this to 0 to disable any kind of logging
+DEBUG_LEVEL = 1
+# Database Handle, again, no need to change them; Only Declarations
+DB = ''
+DB_CURSOR = ''
 
+# Database Related Globals
+DB_NAME='wifiscan'
+DB_USERNAME='root'
+DB_PASSWORD='root'
+DB_TABLE='client'
+DB_HOST='localhost'
 
+'''
+Method for controlling debug or output prints
+'''
+def debug(msg):
+    if DEBUG_LEVEL == 1:
+        print msg
+    else:
+        pass
 
+'''
+Heart of the parsing logic, for extracing 802.11 packets, Probe Request type
+'''
 def PacketHandler(pkt):
+    # Extracting the 802.11 packets, and then only PROBE_REQUEST_TYPE
     if pkt.haslayer(Dot11):
         if pkt.type==PROBE_REQUEST_TYPE and pkt.subtype == PROBE_REQUEST_SUBTYPE :
-            PrintPacket(pkt)
-#            pkt.show()
+            ParsePacket(pkt)
+            # Enable below only for a large dump on screen for packet content
+            #pkt.show()
 
-def PrintPacket(pkt):
+'''
+Parsing the packet and commiting to DB
+'''
+def ParsePacket(pkt):
+    # Pulling in Global Variables
+    global DB
+    global DB_CURSOR
+    global DB_TABLE
+
     try:
         extra = pkt.notdecoded
-    except:
+    except Exception as e:
+        debug('Unable to decode packet; Error: ' + str(e))
         extra = None
+
     if extra!=None:
        signal_strength = -(256-ord(extra[-4:-3]))
     else:
@@ -27,14 +75,47 @@ def PrintPacket(pkt):
         print "No signal strength found"    
     if signal_strength == -256:
 	signal_strength= 0
+
     #print "Timestamp:%d Source: %s RSSi: %d"%(pkt.time, pkt.addr2,signal_strength)
-    print "INSERT INTO client (timestamp,mac,rssi) VALUES (%d,\"%s\",%d)"%(pkt.time, pkt.addr2,signal_strength)
-    cur.execute("INSERT INTO client (timestamp,mac,rssi) VALUES (%s, \"%s\", %s)",(int(float(pkt.time)), pkt.addr2,signal_strength))
+    debug("INSERT INTO client (timestamp,mac,rssi) VALUES (%d,\"%s\",%d)" %(pkt.time, pkt.addr2,signal_strength))
+    query = "INSERT INTO %s (timestamp,mac,rssi) VALUES (%s, \"%s\", %s)" %(DB_TABLE, int(float(pkt.time)), pkt.addr2,signal_strength)
+    #DB_CURSOR.execute("INSERT INTO %s (timestamp,mac,rssi) VALUES (%s, \"%s\", %s)",(DB_TABLE, int(float(pkt.time)), pkt.addr2,signal_strength))
+    try:
+        DB_CURSOR.execute(query)
+        # TODO: Commit operations should be ideally done only periodically - this makes things efficient;
+        # TODO: Add timer or counter support for future
+        DB.commit()
+    except Exception as e:
+        debug('Unable to commit into DB; Error: ' + str(e))
+    else:
+        pass
 
 def main():
-    from datetime import datetime
-    print "[%s] Starting scan"%datetime.now()
-    sniff(iface=sys.argv[1],prn=PacketHandler)
+    global DB
+    global DB_CURSOR
+
+    try:
+        # Opening connection to Database with pre-configured Database, Host, User and Password
+        DB = MySQLdb.connect(host=DB_HOST, user=DB_USERNAME, passwd=DB_PASSWORD, db=DB_NAME) 
+        DB_CURSOR = DB.cursor()
+    except Exception as e:
+        debug('Uable to Open Connection to Database; Error: ' + str(e))
+        sys.exit()
+
+    debug("[%s] Starting scan: " %datetime.now())
+    try:
+        sniff(iface=sys.argv[1], prn=PacketHandler)
+    except KeyboardInterrupt as Ki:
+        DB.commit()
+        debug('Received Interrupt for stopping')
+        DB.close()
+    except Exception as e:
+        debug('Unable to sniff; Error: ' + str(e))
+        DB.close()
+        sys.exit()
+    else:
+        DB.commit()
+        DB.close()
     
 if __name__=="__main__":
     main()
