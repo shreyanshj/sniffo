@@ -1,0 +1,10 @@
+#!/bin/bash
+. /etc/wifiscan.conf
+
+
+sudo ifconfig $INTERFACE down
+sudo iwconfig $INTERFACE mode monitor
+sudo ifconfig $INTERFACE up 
+logger "[SNIFFO]  Starting wifiscan"
+sudo python $INSTALL_DIR/wifiscan.py $INTERFACE 
+logger "[SNIFFO]  Closing wifiscan"

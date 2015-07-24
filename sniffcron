@@ -1,0 +1,13 @@
+#!/bin/bash
+. /etc/wifiscan.conf
+
+logger "[SNIFFO] Dumping $DB_NAME database"
+#dump
+mysqldump -u $DB_USERNAME -p$DB_PASSWORD $DB_NAME > $DB_LOCAL/$DB_NAME.sql
+
+logger "[SNIFFO] Syncing $DB_NAME  to $REMOTE_USER@$REMOTE_SERVER:$REMOTE_PATH"
+
+#sync
+rsync -ratlz --rsh="/usr/bin/sshpass -p $REMOTE_PASSWD ssh -o StrictHostKeyChecking=no -l $REMOTE_USER"   $DB_LOCAL $REMOTE_USER@$REMOTE_SERVER:$REMOTE_PATH
+
+
