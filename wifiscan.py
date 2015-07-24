@@ -33,6 +33,10 @@ DB_PASSWORD='root'
 DB_TABLE='client'
 DB_HOST='localhost'
 
+# Sync count-out
+SYNCTIME = 10
+
+
 '''
 Method for controlling debug or output prints
 '''
@@ -50,8 +54,6 @@ def PacketHandler(pkt):
     if pkt.haslayer(Dot11):
         if pkt.type==PROBE_REQUEST_TYPE and pkt.subtype == PROBE_REQUEST_SUBTYPE :
             ParsePacket(pkt)
-            # Enable below only for a large dump on screen for packet content
-            #pkt.show()
 
 '''
 Parsing the packet and commiting to DB
@@ -61,6 +63,9 @@ def ParsePacket(pkt):
     global DB
     global DB_CURSOR
     global DB_TABLE
+    global SYNCTIME
+
+    sync_time = 0
 
     try:
         extra = pkt.notdecoded
@@ -82,9 +87,14 @@ def ParsePacket(pkt):
     #DB_CURSOR.execute("INSERT INTO %s (timestamp,mac,rssi) VALUES (%s, \"%s\", %s)",(DB_TABLE, int(float(pkt.time)), pkt.addr2,signal_strength))
     try:
         DB_CURSOR.execute(query)
-        # TODO: Commit operations should be ideally done only periodically - this makes things efficient;
-        # TODO: Add timer or counter support for future
-        DB.commit()
+        # Performing the commit only for every 10th packet
+        # This value can be tuned using the SYNCTIME field above
+        if sync_time == SYNCTIME:
+            DB.commit()
+            sync_time = 0
+        else:
+            sync_time = sync_time + 1
+        
     except Exception as e:
         debug('Unable to commit into DB; Error: ' + str(e))
     else:
