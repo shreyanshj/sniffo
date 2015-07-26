@@ -34,7 +34,7 @@ DB_TABLE='client'
 DB_HOST='localhost'
 
 # Sync count-out
-SYNCTIME = 10
+SYNCTIME = 100
 
 
 '''
