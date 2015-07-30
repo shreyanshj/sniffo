@@ -104,7 +104,7 @@ def main():
 
     debug("[%s] Starting scan: " %datetime.now())
     try:
-        sniff(iface=sys.argv[1], prn=PacketHandler)
+        sniff(iface=sys.argv[1], prn=PacketHandler, store=0)
     except KeyboardInterrupt as Ki:
         DB.commit()
         debug('Received Interrupt for stopping')
